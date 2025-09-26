@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	request "httpServerGo/internal"
+	request "httpServerGo/internal/request"
 	"log"
 	"net"
 )

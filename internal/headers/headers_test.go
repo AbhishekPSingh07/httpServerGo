@@ -1,28 +1,83 @@
 package headers
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHeaderParse(t *testing.T) {
 
-	// Test: Valid single header
-	headers := NewHeaders()
-	data := []byte("Host: localhost:42069\r\n\r\n")
-	n, done, err := headers.Parse(data)
-	require.NoError(t, err)
-	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
-	assert.Equal(t, 23, n)
-	assert.True(t, done)
+	tests := []struct {
+		name    string
+		data    string
+		headers []string
+		values  []string
+		length  int
+		done    bool
+		wantErr bool
+	}{
+		{
+			name:    "valid single header",
+			headers: []string{"Host"},
+			data:    "Host: localhost:42069\r\n\r\n",
+			length:  23,
+			done:    true,
+			wantErr: false,
+			values:  []string{"localhost:42069"},
+		}, {
+			name:    "invalid spacing header",
+			wantErr: true,
+			data:    "     Host  : localhost:42069\r\n\r\n",
+			length:  0,
+			done:    false,
+		}, {
+			name:    "valid single header with extra white space",
+			headers: []string{"Host"},
+			length:  44,
+			data:    "         Host: localhost:42069            \r\n\r\n",
+			done:    true,
+			wantErr: false,
+			values:  []string{"localhost:42069"},
+		}, {
+			name:    "valide two headers",
+			wantErr: false,
+			data:    "Host: localhost:42069\r\n    Foo: bar  \r\n\r\n",
+			length:  39,
+			done:    true,
+			headers: []string{"Host", "Foo"},
+			values:  []string{"localhost:42069", "bar"},
+		}, {
+			name:    "malformed header",
+			wantErr: true,
+			data:    "H©st: localhost:42069\r\n\r\n",
+			length:  0,
+			done:    false,
+		}, {
+			name:    "valide multiple values",
+			wantErr: false,
+			data:    "Host: localhost:42069\r\nSet-Person: abhishek\r\nSet-Person: prithvi\r\nSet-Person: singh\r\n\r\n",
+			length:  85,
+			done:    true,
+			headers: []string{"Host", "Set-Person"},
+			values:  []string{"localhost:42069", "abhishek,prithvi,singh"},
+		},
+	}
 
-	// Test: Invalid spacing header
-	headers = NewHeaders()
-	data = []byte("       Host : localhost:42069       \r\n\r\n")
-	n, done, err = headers.Parse(data)
-	require.Error(t, err)
-	assert.Equal(t, 0, n)
-	assert.False(t, done)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := NewHeaders()
+			data := []byte(tt.data)
+			n, done, err := headers.Parse(data)
+
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error got none")
+			}
+			for i := range tt.headers {
+				assert.Equal(t, tt.values[i], headers.Get(tt.headers[i]))
+			}
+			assert.Equal(t, tt.length, n)
+			assert.Equal(t, tt.done, done)
+		})
+	}
 }

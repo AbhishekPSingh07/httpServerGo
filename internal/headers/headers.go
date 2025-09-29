@@ -86,6 +86,7 @@ func (h *Headers) Parse(data []byte) (int, bool, error) {
 
 		// EMPTY HEADER
 		if idx == 0 {
+			read += len(rn)
 			done = true
 			break
 		}

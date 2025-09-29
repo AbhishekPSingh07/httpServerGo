@@ -3,15 +3,17 @@ package request
 import (
 	"bytes"
 	"fmt"
+	"httpServerGo/internal/headers"
 	"io"
 )
 
 type parserState string
 
 const (
-	StateInit parserState = "init"
-	StateDone parserState = "done"
-	StateErr  parserState = "error"
+	StateInit   parserState = "init"
+	StateHeader parserState = "header"
+	StateDone   parserState = "done"
+	StateErr    parserState = "error"
 )
 
 type RequestLine struct {
@@ -26,12 +28,14 @@ func (r *RequestLine) ValidMethod() bool {
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     *headers.Headers
 	state       parserState
 }
 
 func newRequest() *Request {
 	return &Request{
-		state: StateInit,
+		state:   StateInit,
+		Headers: headers.NewHeaders(),
 	}
 }
 
@@ -40,11 +44,13 @@ func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
+		currentData := data[read:]
+
 		switch r.state {
 		case StateErr:
 			return 0, ErroRequestInErrorState
 		case StateInit:
-			rl, n, err := parseRequestLine(data[read:])
+			rl, n, err := parseRequestLine(currentData)
 			if err != nil {
 				r.state = StateErr
 				return 0, err
@@ -57,10 +63,28 @@ outer:
 			r.RequestLine = *rl
 			read += n
 
-			r.state = StateDone
+			r.state = StateHeader
+		case StateHeader:
 
+			n, done, err := r.Headers.Parse(currentData)
+			if err != nil {
+				r.state = StateErr
+				return 0, err
+			}
+
+			if n == 0 {
+				break outer
+			}
+
+			read += n
+
+			if done {
+				r.state = StateDone
+			}
 		case StateDone:
 			break outer
+		default:
+			panic("i have doemsome shitty mistake")
 		}
 	}
 
@@ -79,7 +103,7 @@ var SEPERATOR = []byte("\r\n")
 func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	idx := bytes.Index(b, SEPERATOR)
 	if idx == -1 {
-		return nil, 0, nil 
+		return nil, 0, nil
 	}
 	startLine := b[:idx]
 	read := idx + len(SEPERATOR)

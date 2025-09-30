@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"httpServerGo/internal/headers"
 	"io"
+	"strconv"
 )
 
 type parserState string
@@ -27,16 +28,11 @@ func (r *RequestLine) ValidMethod() bool {
 	return r.Method == "GET" || r.Method == "POST" || r.Method == "PATCH" || r.Method == "PUT" || r.Method == "DELETE" || r.Method == "OPTIONS"
 }
 
-type RequestBody struct{
-  Body string
-  BodyLength string
-}
-
 type Request struct {
 	RequestLine RequestLine
 	Headers     *headers.Headers
 	state       parserState
-	Body        RequestBody
+	Body        []byte
 }
 
 func newRequest() *Request {
@@ -58,9 +54,9 @@ outer:
 			return 0, ErroRequestInErrorState
 		case StateInit:
 			rl, n, err := parseRequestLine(currentData)
-      if err == ErrIncomplete {
-        break outer
-      }
+			if err == ErrIncomplete {
+				break outer
+			}
 			if err != nil {
 				r.state = StateErr
 				return 0, err
@@ -84,10 +80,23 @@ outer:
 			read += n
 
 			if done {
-				r.state = StateDone
+				r.state = StateBody
 			}
 		case StateBody:
-      
+			length := getInt(r.Headers, "content-length", 0)
+			if length == 0 {
+				r.state = StateDone
+				break outer
+			}
+
+			if len(currentData) >= length {
+				r.Body = make([]byte, length)
+				copy(r.Body, currentData[:length])
+				read += length
+				r.state = StateDone
+			} else {
+				break outer
+			}
 		case StateDone:
 			break outer
 		default:
@@ -105,14 +114,21 @@ func (r *Request) done() bool {
 var ErrMalformedRequestLine = fmt.Errorf("malformed request-line")
 var ErrUnsupportedHTTPVersion = fmt.Errorf("unsupported http version")
 var ErroRequestInErrorState = fmt.Errorf("request in error state")
-var ErrIncomplete = errors.New("incomplete data")
+var ErrIncomplete = fmt.Errorf("incomplete data")
 var SEPERATOR = []byte("\r\n")
 
-func parseRequestBody(b []byte,contentLength int) (string,error) {
-  if contentLength == -1 {
-    return "",fmt.Errorf("content length not provided")
-  }
-  if 
+func getInt(headers *headers.Headers, name string, defaulValue int) int {
+
+	str, exists := headers.Get(name)
+	if !exists {
+		return defaulValue
+	}
+
+	value, err := strconv.Atoi(str)
+	if err != nil {
+		return defaulValue
+	}
+	return value
 }
 
 func parseRequestLine(b []byte) (*RequestLine, int, error) {

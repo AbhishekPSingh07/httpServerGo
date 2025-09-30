@@ -32,6 +32,7 @@ func (cr *chunkReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
+// TODO : Add more test cases here
 func TestUnit_ParseRequestBody(t *testing.T) {
 
 	tests := []struct {
@@ -41,14 +42,14 @@ func TestUnit_ParseRequestBody(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "Standard headers",
+			name:     "Standard body string",
 			request:  "POST /submit HTTP/1.1\r\nHost: localhost:42069\r\nContent-Length: 13\r\n\r\nhello world!\n",
 			wantBody: "hello world!\n",
 			wantErr:  false,
 		},
 		{
-			name:    "Malformed Headers",
-			request: "GET / HTTP/1.1\r\nHost localhost:42069\r\n\r\n",
+			name:    "Body shorter than reported content length",
+			request: "POST /submit HTTP/1.1\r\nHost: localhost:42069\r\nContent-Length: 20\r\n\r\npartial content",
 			wantErr: true,
 		},
 	}
@@ -71,7 +72,7 @@ func TestUnit_ParseRequestBody(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected no error, but got one: %v", err)
 			}
-			assert.Equal(t, tt.wantBody, r.Body)
+			assert.Equal(t, tt.wantBody, string(r.Body))
 		})
 	}
 }
@@ -119,7 +120,11 @@ func TestUnit_ParseRequestHeader(t *testing.T) {
 				t.Fatalf("expected no error, but got one: %v", err)
 			}
 			for i := range tt.headers {
-				assert.Equal(t, tt.values[i], r.Headers.Get(tt.headers[i]))
+				if value, ok := r.Headers.Get(tt.headers[i]); ok {
+					assert.Equal(t, tt.values[i], value)
+				} else {
+					t.Fatalf("got value set for header: %s", tt.headers[i])
+				}
 			}
 
 		})

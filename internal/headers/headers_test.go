@@ -74,7 +74,11 @@ func TestHeaderParse(t *testing.T) {
 				t.Fatalf("expected error got none")
 			}
 			for i := range tt.headers {
-				assert.Equal(t, tt.values[i], headers.Get(tt.headers[i]))
+				if value, ok := headers.Get(tt.headers[i]); ok {
+					assert.Equal(t, tt.values[i], value)
+				} else {
+					t.Fatalf("expected value: %s found for none", tt.values[i])
+				}
 			}
 			assert.Equal(t, tt.length, n)
 			assert.Equal(t, tt.done, done)

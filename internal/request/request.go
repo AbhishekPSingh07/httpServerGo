@@ -12,6 +12,7 @@ type parserState string
 const (
 	StateInit   parserState = "init"
 	StateHeader parserState = "header"
+	StateBody   parserState = "body"
 	StateDone   parserState = "done"
 	StateErr    parserState = "error"
 )
@@ -26,10 +27,16 @@ func (r *RequestLine) ValidMethod() bool {
 	return r.Method == "GET" || r.Method == "POST" || r.Method == "PATCH" || r.Method == "PUT" || r.Method == "DELETE" || r.Method == "OPTIONS"
 }
 
+type RequestBody struct{
+  Body string
+  BodyLength string
+}
+
 type Request struct {
 	RequestLine RequestLine
 	Headers     *headers.Headers
 	state       parserState
+	Body        RequestBody
 }
 
 func newRequest() *Request {
@@ -51,15 +58,13 @@ outer:
 			return 0, ErroRequestInErrorState
 		case StateInit:
 			rl, n, err := parseRequestLine(currentData)
+      if err == ErrIncomplete {
+        break outer
+      }
 			if err != nil {
 				r.state = StateErr
 				return 0, err
 			}
-
-			if n == 0 {
-				break outer
-			}
-
 			r.RequestLine = *rl
 			read += n
 
@@ -81,6 +86,8 @@ outer:
 			if done {
 				r.state = StateDone
 			}
+		case StateBody:
+      
 		case StateDone:
 			break outer
 		default:
@@ -98,12 +105,20 @@ func (r *Request) done() bool {
 var ErrMalformedRequestLine = fmt.Errorf("malformed request-line")
 var ErrUnsupportedHTTPVersion = fmt.Errorf("unsupported http version")
 var ErroRequestInErrorState = fmt.Errorf("request in error state")
+var ErrIncomplete = errors.New("incomplete data")
 var SEPERATOR = []byte("\r\n")
+
+func parseRequestBody(b []byte,contentLength int) (string,error) {
+  if contentLength == -1 {
+    return "",fmt.Errorf("content length not provided")
+  }
+  if 
+}
 
 func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	idx := bytes.Index(b, SEPERATOR)
 	if idx == -1 {
-		return nil, 0, nil
+		return nil, 0, ErrIncomplete
 	}
 	startLine := b[:idx]
 	read := idx + len(SEPERATOR)
